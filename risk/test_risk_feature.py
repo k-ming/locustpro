@@ -40,11 +40,11 @@ class TestRiskFeature(TaskSet):
                 # print(response)
                 response.failure("请求失败！")
             else :
-                json_data = response.json()["data"]
-                if json_data["data"]["local_applist_genreid_game_action_90d_cnt"] and json_data["data"]["local_applist_loan_app_updated_720d_cnt"]:
-                    print(json_data["data"]["local_applist_genreid_game_action_90d_cnt"] )
-                    if json_data["data"]["local_applist_genreid_game_action_90d_cnt"]['val'] !=0 or json_data["data"]["local_applist_loan_app_updated_720d_cnt"]['val'] !=0:
-                        response.failure("响应超时！")
+                json_data = response.json()["data"]["data"]
+                if json_data["local_applist_genreid_game_action_90d_cnt"] and json_data["local_applist_loan_app_updated_720d_cnt"]:
+                    print(json_data["local_applist_genreid_game_action_90d_cnt"] )
+                    if json_data["data"]["local_applist_genreid_game_action_90d_cnt"]['val'] ==-999 or json_data["local_applist_loan_app_updated_720d_cnt"]['val'] !=-999:
+                        response.failure("响应异常！")
                     response.success()
                 else:
                     response.failure("没有响应！")
