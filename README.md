@@ -231,9 +231,117 @@ ON STOP...
 EVENT ON TEST STOP...
 ```
 ## 四、标记成功或失败
+### 4.1 标记失败
+- 使用 response.failure(reason='响应失败！')， 如下面的脚本，所有请求都会被标记成失败
+```python
+import os
+
+from locust import  HttpUser, task, between
+
+class Users(HttpUser):
+    wait_time = between(1, 2)
+    host = "https://"
+    @task
+    def test_baidu(self):
+        with self.client.get("www.baidu.com", catch_response=True) as response:
+            if response.url != self.host:
+                response.failure("域名错误！")
+            # else:
+            #     response.success()
+
+if __name__ == "__main__":
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    os.system("locust -f test_success_failure.py -u 1 -t 10s --headless ")
+```
+```shell
+[2025-05-07 19:20:33,922] hb32366deMacBook-Pro/INFO/locust.main: Shutting down (exit code 1)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      /                                                                                  7   7(100.00%) |     61      20     123     63 |    0.81        0.81
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                         7   7(100.00%) |     61      20     123     63 |    0.81        0.81
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+GET      /                                                                                      63     64     85     85    120    120    120    120    120    120    120      7
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                             63     64     85     85    120    120    120    120    120    120    120      7
+
+Error report
+# occurrences      Error                                                                                               
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+7                  GET /: 域名错误！                                                                                        
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+
+```
+### 4.2 标记成功 
+- 使用 response.success()，如下面的脚本, 则所有的请求都会被标记为成功
+```python
+import os
+
+from locust import  HttpUser, task, between
+
+class Users(HttpUser):
+    wait_time = between(1, 2)
+    host = "https://"
+    @task
+    def test_baidu(self):
+        with self.client.get("www.baidu.com", catch_response=True) as response:
+            if response.status_code == 200:
+                response.success()
+
+if __name__ == "__main__":
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    os.system("locust -f test_success_failure.py -u 1 -t 10s --headless ")
+```
+```shell
+[2025-05-07 19:25:47,326] hb32366deMacBook-Pro/INFO/locust.main: --run-time limit reached, shutting down
+[2025-05-07 19:25:47,362] hb32366deMacBook-Pro/INFO/locust.main: Shutting down (exit code 0)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      /                                                                                  5     0(0.00%) |    511      47    1163    140 |    0.56        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                         5     0(0.00%) |    511      47    1163    140 |    0.56        0.00
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+GET      /                                                                                     140   1100   1100   1200   1200   1200   1200   1200   1200   1200   1200      5
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                            140   1100   1100   1200   1200   1200   1200   1200   1200   1200   1200      5
+
+```
 ## 五、分布式压测
 ### 5.1 master
+- master表示主节点，用于控制压测，执行下面的命令后，会打开web服务，同时等待子节点的连接
+```shell
+locust -f risk/test_applist_feature.py --master
+```
+- master主节点启动成功后会输出web控制台地址，访问即可打开控制台
+```shell
+locust.main: Starting Locust 2.33.0
+locust.main: Starting web interface at http://0.0.0.0:8089, press enter to open your default browser.
+```
+- 子节点连接成功后，会输出相应的节点
+```shell
+[2025-05-06 20:27:48,157] hb32366deMacBook-Pro/INFO/locust.runners: hb32366deMacBook-Pro.local_9256083c217b4d6189aa9c2d13bc22fb (index 0) reported as ready. 1 workers connected.
+[2025-05-06 20:27:58,445] hb32366deMacBook-Pro/INFO/locust.runners: hb32366deMacBook-Pro.local_913c9ca6296847f6b594ebcd41305f97 (index 1) reported as ready. 2 workers connected.
+[2025-05-06 20:28:09,595] hb32366deMacBook-Pro/INFO/locust.runners: hb32366deMacBook-Pro.local_5a72cb6d4dd043b3bc414edd961eb6ae (index 2) reported as ready. 3 workers connected.
+[2025-05-06 20:28:15,723] hb32366deMacBook-Pro/INFO/locust.runners: hb32366deMacBook-Pro.local_3a31caa8d1174ba3ba770fdffc476276 (index 3) reported as ready. 4 workers connected.
+[2025-05-06 20:28:25,514] hb32366deMacBook-Pro/INFO/locust.runners: hb32366deMacBook-Pro.local_ce356bb9ce97448f884eb81206c4a612 (index 4) reported as ready. 5 workers connected.
+```
 ### 5.2 worker
+- worker表示子节点，每个子节点会分配一定的vuser, 它使用的是协程，会占用一定的cpu和内存资源，开子节点时如果不指定host,默认事127.0.0.1
+```shell
+(venv) hb32366@hb32366deMacBook-Pro locust_asset % locust -f risk/test_applist_feature.py --worker --host 127.0.0.1 
+[2025-05-07 19:38:55,104] hb32366deMacBook-Pro/INFO/locust.main: Starting Locust 2.33.0
+```
+- 使用 --host 参数指定 host后，就会连接到host对应的master节点上，master会输出
+```shell
+[2025-05-07 19:38:55,112] hb32366deMacBook-Pro/INFO/locust.runners: hb32366deMacBook-Pro.local_8238c824b4004fe299e82fa8533190db (index 0) reported as ready. 1 workers connected.
+
+```
 ## 六、其他对象压测
 ### 6.1 pgsql
 ### 6.2 rpc接口压测
