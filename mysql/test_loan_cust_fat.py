@@ -25,8 +25,8 @@ class MySQLClient:
         self.cursor.execute(' SELECT * FROM cust_account_info where mobile_no=8100000006 ')
         result = self.cursor.fetchall()
         self.cursor.close()
-        return result
-        # print(result)
+        # return result
+        print(result)
 
 class DatabaseUser(User):
     wait_time = between(0.5, 2)  # 模拟用户思考时间

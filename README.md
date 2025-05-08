@@ -127,6 +127,105 @@ Type     Name                                                                   
 --------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
 
 ```
+### 2.4 debug模式运行
+- 调试请求的时候，可以用debug模式运行，如下面的脚本
+```python
+from locust import  HttpUser, task, between, run_single_user
+
+class Users(HttpUser):
+    wait_time = between(1, 2)
+    host = "https://"
+    @task
+    def test_baidu(self):
+        with self.client.get("www.baidu.com", catch_response=True) as response:
+            if response.status_code == 200:
+                response.success()
+
+if __name__ == "__main__":
+    run_single_user(Users, include_context=True, loglevel="INFO")
+```
+- 上面的脚本运行结果如下, 输入的结果在run_single_user的参数中指定 
+```shell
+type	name                                              	resp_ms	exception	context		
+GET	/                                                 	131    	         		
+GET	/                                                 	36     	         		
+GET	/                                                 	3163   	         		
+GET	/                                                 	1092   	         		
+GET	/                                                 	37     	         		
+GET	/                                                 	36     	         		
+GET	/                                                 	69     	         		
+GET	/                                                 	70 
+```
+### 2.5 更快的vuser, FastHttpUser
+- Locust 的默认 HTTP 客户端使用 python-requests。它提供了许多 python 开发人员都熟悉的不错 API，并且维护得非常好。但是，如果您计划以非常高的吞吐量运行测试，并且运行 Locust 的硬件有限，则有时效率不够。
+- 因此，Locust 还附带了 FastHttpUser，它使用 geventhttpclient。它提供了一个非常相似的 API，并且使用的 CPU 时间明显减少，有时会将给定硬件上每秒的最大请求数增加多达 5 到 6 倍。
+- 在最佳情况下 （在一段时间内执行小请求 True-loop），单个 Locust 进程（仅限于一个 CPU 内核） 可以使用 FastHttpUser 每秒处理大约 16000 个请求，使用 HttpUser 每秒处理 4000 个请求 （在 2021 M1 MacBook Pro 和 Python 3.11 上测试）
+- 使用方法，vuser类直接继承 FastHttpUser， 如下面的代码, 它使用rest方法请求restful API， 与python-requests的post请求类似，它是 self.client.request 的包装器, 当然使用self.client.post也是可以的
+```python
+import random
+
+from locust import FastHttpUser, task, between
+
+
+
+headers = {
+    'Content-Type': 'application/json',
+    'Connection': 'keep-alive',
+}
+cust_no = ['800000015507',
+            '800000026506',
+            '800000020502',
+            '800000007503',
+            '800000018505',
+            '800000007004',
+            '800000019008',
+            '800000002007',
+            '800000003015',
+            '800000018509',
+            '800000003006',
+            '800000014522',
+            '800000027001',
+            '800000006001',
+            '800000011002',
+            '800000026511',
+            '800000008026',
+            '800000018511',
+            '800000024738',
+            '800000007501',
+            '800000024745',
+            '800000027008',
+            '800000008008',
+            '800000026007',
+            '800000027010',
+            '800000026501',
+            '800000011512',
+            '800000018504'
+           ]
+
+class FeatureUser(FastHttpUser):
+    wait_time = between(1, 2)
+    host = "http://approve-fat.sandbox-shuangqiang.top"
+
+    @task
+    def test_feature(self):
+        payload = {
+            "custNo": random.choice(cust_no),
+            "appSystem": "MEX001",
+            "subPackage": "HOLA"
+        }
+        with self.rest("post","/loanapprove/appList/getAllAppListImpress", headers=headers, json=payload) as response:
+            if response.status_code != 200:
+                response.failure("响应异常！")
+                print(response)
+            elif response.js is None:
+                response.failure("响应异常！")
+            elif response.js["retCode"] != "000000":
+                response.failure("响应异常！")
+                print(response)
+            else:
+                # print(response.json())
+                response.success()
+```
 ## 三、hooks处理
 ### 3.1 events.init.add_listener
 - 全局初始化处理，最先执行一次，为后续步骤准备

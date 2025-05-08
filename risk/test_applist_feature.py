@@ -1,7 +1,7 @@
-import os
 import random
 
 from locust import HttpUser, TaskSet, task, between
+
 
 class FeatureTaskSet(TaskSet):
     def on_start(self):
@@ -70,3 +70,4 @@ class FeatureUser(HttpUser):
     tasks = [FeatureTaskSet]
     wait_time = between(1, 2)
     host = "http://approve-fat.sandbox-shuangqiang.top"
+

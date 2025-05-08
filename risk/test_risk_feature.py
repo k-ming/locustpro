@@ -1,4 +1,4 @@
-from locust import HttpUser, TaskSet, task, between
+from locust import HttpUser, TaskSet, task, between, run_single_user
 
 """
 风控特征获取接口压测

@@ -1,6 +1,6 @@
 import os
 
-from locust import  HttpUser, task, between
+from locust import  HttpUser, task, between, run_single_user
 
 class Users(HttpUser):
     wait_time = between(1, 2)
@@ -14,5 +14,6 @@ class Users(HttpUser):
                 response.success()
 
 if __name__ == "__main__":
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    os.system("locust -f test_success_failure.py -u 1 -t 10s --headless ")
+    # os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    # os.system("locust -f test_success_failure.py -u 1 -t 10s --headless ")
+    run_single_user(Users, include_context=True, loglevel="INFO")
