@@ -226,6 +226,78 @@ class FeatureUser(FastHttpUser):
                 # print(response.json())
                 response.success()
 ```
+### 2.6 Using Locust as a library 
+- locust作为库的方式运行, 可以单独允许你的python脚本，而不必使用locust命令，如下面的脚本 test_as_library.py
+```python
+from locust import HttpUser, events, task
+from locust.env import Environment
+from locust.log import setup_logging
+from locust.stats import stats_history, stats_printer
+
+import gevent
+
+setup_logging("INFO")
+
+
+class MyUser(HttpUser):
+    host = "https://www.baidu.com"
+
+    @task
+    def t(self):
+        self.client.get("/")
+
+
+# setup Environment and Runner
+env = Environment(user_classes=[MyUser], events=events)
+runner = env.create_local_runner()
+
+# start a WebUI instance
+web_ui = env.create_web_ui("127.0.0.1", 8089)
+
+# execute init event handlers (only really needed if you have registered any)
+env.events.init.fire(environment=env, runner=runner, web_ui=web_ui)
+
+# start a greenlet that periodically outputs the current stats
+gevent.spawn(stats_printer(env.stats))
+
+# start a greenlet that save current stats to history
+gevent.spawn(stats_history, env.runner)
+
+# start the test
+runner.start(1, spawn_rate=10)
+
+# in 30 seconds stop the runner
+gevent.spawn_later(30, runner.quit)
+
+# wait for the greenlets
+runner.greenlet.join()
+
+# stop the web server for good measures
+web_ui.stop()
+```
+- 则他会在终端窗口中允许测试，结果如下
+```shell
+/Users/hb32366/devs/locust_asset/venv/bin/python3.13 /Users/hb32366/devs/locust_asset/tests/test_as_library.py 
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                         0     0(0.00%) |      0       0       0      0 |    0.00        0.00
+
+[2025-05-15 19:19:37,008] hb32366deMacBook-Pro/INFO/locust.runners: Ramping to 1 users at a rate of 10.00 per second
+[2025-05-15 19:19:37,008] hb32366deMacBook-Pro/INFO/locust.runners: All users spawned: {"MyUser": 1} (1 total users)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                         0     0(0.00%) |      0       0       0      0 |    0.00        0.00
+
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      /                                                                                  2     0(0.00%) |   1622      36    3208     37 |    0.00        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                         2     0(0.00%) |   1622      36    3208     37 |    0.00        0.00
+
+
+```
 ## 三、hooks处理
 ### 3.1 events.init.add_listener
 - 全局初始化处理，最先执行一次，为后续步骤准备
@@ -441,6 +513,7 @@ locust.main: Starting web interface at http://0.0.0.0:8089, press enter to open 
 [2025-05-07 19:38:55,112] hb32366deMacBook-Pro/INFO/locust.runners: hb32366deMacBook-Pro.local_8238c824b4004fe299e82fa8533190db (index 0) reported as ready. 1 workers connected.
 
 ```
-## 六、其他对象压测
-### 6.1 pgsql
-### 6.2 rpc接口压测
+## 六、第三方扩展 locust-plugins
+- 安装locust-plugins 其他协议负载测试
+### 
+- 
