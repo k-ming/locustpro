@@ -298,6 +298,163 @@ GET      /                                                                      
 
 
 ```
+### 2.7 使用SequentialTaskSet, 组织链路压测
+- 比如：有如下场景，用户注册、登录、提交个人信息、获取额度，就可以是用SequentialTaskSet实现
+- 使用Queue线程获取手机号，避免重复，当手机号用尽时，退出整个压测流程 self.environment.runner.quit()
+- 顺序执行到其中一个步骤，不满足条件时，退出当前线程self.interrupt()，后面的步骤不再执行，新的用户不受影响
+```python
+from locust import FastHttpUser, SequentialTaskSet, task, between
+import logging as log
+from queue import Queue
+
+phone_queue = Queue()
+for phone in range(2000000000, 2000010000):
+    """
+    使用线程取手机号，避免重复
+    """
+    phone_queue.put(phone)
+
+class RegisterAndCredit(SequentialTaskSet):
+    def on_start(self):
+        """
+        :return: 每次启动前先生成一个手机号
+        """
+        if phone_queue.empty():
+            log.error("手机号用尽！")
+            self.environment.runner.quit()
+        else:
+            self.mobile = phone_queue.get()
+            log.info(f"分配手机号：{self.mobile}")
+
+    @task
+    def check_mobile(self):
+        if self.mobile > 2000000020:
+            log.error(f"手机号已注册: {self.mobile}")
+            self.interrupt()
+        else:
+            log.info(f"手机号未注册: {self.mobile}")
+
+    @task
+    def register(self):
+        if self.mobile > 2000000015:
+            log.error(f"❌登录失败！: {self.mobile}")
+            self.interrupt()
+        else:
+            log.info(f"✅登录成功!: {self.mobile}")
+
+    @task
+    def submit_user_info(self):
+        if self.mobile > 2000000008:
+            log.error(f"❌用户信息提交失败: {self.mobile}")
+            self.interrupt()
+        else:
+            log.info(f"用户信息提交成功: {self.mobile}")
+
+    @task
+    def get_credit_limit(self):
+        if self.mobile > 2000000004:
+            log.error(f"❌获取用户额度失败: {self.mobile}")
+            self.interrupt()
+        else:
+            log.info(f"获取用户额度成功: {self.mobile}")
+            self.interrupt()
+
+
+class VirtualUser(FastHttpUser):
+    wait_time = between(1, 3)
+    tasks = [RegisterAndCredit]
+    host = "http://127.0.0.1"
+```
+- 执行过程如下
+```shell
+[2025-07-15 11:13:02,322] hb32366deMacBook-Pro/INFO/locust.main: Starting Locust 2.37.1
+[2025-07-15 11:13:02,323] hb32366deMacBook-Pro/INFO/locust.main: Starting web interface at http://0.0.0.0:8089, press enter to open your default browser.
+[2025-07-15 11:13:23,340] hb32366deMacBook-Pro/INFO/locust.runners: Ramping to 3 users at a rate of 1.00 per second
+[2025-07-15 11:13:23,341] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000000
+[2025-07-15 11:13:23,341] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000000
+[2025-07-15 11:13:24,341] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000001
+[2025-07-15 11:13:24,342] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000001
+[2025-07-15 11:13:24,840] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000000
+[2025-07-15 11:13:25,342] hb32366deMacBook-Pro/INFO/locust.runners: All users spawned: {"VirtualUser": 3} (3 total users)
+[2025-07-15 11:13:25,343] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000002
+[2025-07-15 11:13:25,343] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000002
+[2025-07-15 11:13:26,572] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000001
+[2025-07-15 11:13:26,616] hb32366deMacBook-Pro/INFO/root: 用户信息提交成功: 2000000000
+[2025-07-15 11:13:27,836] hb32366deMacBook-Pro/INFO/root: 用户信息提交成功: 2000000001
+[2025-07-15 11:13:27,965] hb32366deMacBook-Pro/INFO/root: 获取用户额度成功: 2000000000
+[2025-07-15 11:13:27,965] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000003
+[2025-07-15 11:13:27,965] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000003
+[2025-07-15 11:13:28,086] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000002
+[2025-07-15 11:13:29,058] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000003
+[2025-07-15 11:13:29,863] hb32366deMacBook-Pro/INFO/root: 用户信息提交成功: 2000000002
+[2025-07-15 11:13:30,096] hb32366deMacBook-Pro/INFO/root: 获取用户额度成功: 2000000001
+[2025-07-15 11:13:30,096] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000004
+[2025-07-15 11:13:30,097] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000004
+[2025-07-15 11:13:30,809] hb32366deMacBook-Pro/INFO/root: 用户信息提交成功: 2000000003
+[2025-07-15 11:13:32,285] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000004
+[2025-07-15 11:13:32,764] hb32366deMacBook-Pro/INFO/root: 获取用户额度成功: 2000000002
+[2025-07-15 11:13:32,764] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000005
+[2025-07-15 11:13:32,764] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000005
+[2025-07-15 11:13:33,697] hb32366deMacBook-Pro/INFO/root: 获取用户额度成功: 2000000003
+[2025-07-15 11:13:33,698] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000006
+[2025-07-15 11:13:33,698] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000006
+[2025-07-15 11:13:33,819] hb32366deMacBook-Pro/INFO/root: 用户信息提交成功: 2000000004
+[2025-07-15 11:13:34,021] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000005
+[2025-07-15 11:13:35,222] hb32366deMacBook-Pro/INFO/root: 用户信息提交成功: 2000000005
+[2025-07-15 11:13:35,269] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000006
+[2025-07-15 11:13:35,934] hb32366deMacBook-Pro/INFO/root: 获取用户额度成功: 2000000004
+[2025-07-15 11:13:35,934] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000007
+[2025-07-15 11:13:35,934] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000007
+[2025-07-15 11:13:36,788] hb32366deMacBook-Pro/INFO/root: 用户信息提交成功: 2000000006
+[2025-07-15 11:13:37,868] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000007
+[2025-07-15 11:13:38,146] hb32366deMacBook-Pro/ERROR/root: ❌获取用户额度失败: 2000000005
+[2025-07-15 11:13:38,146] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000008
+[2025-07-15 11:13:38,146] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000008
+[2025-07-15 11:13:38,956] hb32366deMacBook-Pro/ERROR/root: ❌获取用户额度失败: 2000000006
+[2025-07-15 11:13:38,956] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000009
+[2025-07-15 11:13:38,956] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000009
+[2025-07-15 11:13:39,589] hb32366deMacBook-Pro/INFO/root: 用户信息提交成功: 2000000007
+[2025-07-15 11:13:39,794] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000008
+[2025-07-15 11:13:40,471] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000009
+[2025-07-15 11:13:42,003] hb32366deMacBook-Pro/INFO/root: 用户信息提交成功: 2000000008
+[2025-07-15 11:13:42,159] hb32366deMacBook-Pro/ERROR/root: ❌获取用户额度失败: 2000000007
+[2025-07-15 11:13:42,159] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000010
+[2025-07-15 11:13:42,160] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000010
+[2025-07-15 11:13:43,085] hb32366deMacBook-Pro/ERROR/root: ❌用户信息提交失败: 2000000009
+[2025-07-15 11:13:43,085] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000011
+[2025-07-15 11:13:43,085] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000011
+[2025-07-15 11:13:43,254] hb32366deMacBook-Pro/ERROR/root: ❌获取用户额度失败: 2000000008
+[2025-07-15 11:13:43,255] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000012
+[2025-07-15 11:13:43,255] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000012
+[2025-07-15 11:13:43,257] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000010
+[2025-07-15 11:13:44,111] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000011
+[2025-07-15 11:13:44,753] hb32366deMacBook-Pro/ERROR/root: ❌用户信息提交失败: 2000000010
+[2025-07-15 11:13:44,754] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000013
+[2025-07-15 11:13:44,754] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000013
+[2025-07-15 11:13:45,222] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000012
+[2025-07-15 11:13:46,390] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000013
+[2025-07-15 11:13:46,648] hb32366deMacBook-Pro/ERROR/root: ❌用户信息提交失败: 2000000011
+[2025-07-15 11:13:46,648] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000014
+[2025-07-15 11:13:46,648] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000014
+[2025-07-15 11:13:47,678] hb32366deMacBook-Pro/ERROR/root: ❌用户信息提交失败: 2000000012
+[2025-07-15 11:13:47,678] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000015
+[2025-07-15 11:13:47,678] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000015
+[2025-07-15 11:13:48,085] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000014
+[2025-07-15 11:13:48,345] hb32366deMacBook-Pro/ERROR/root: ❌用户信息提交失败: 2000000013
+[2025-07-15 11:13:48,346] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000016
+[2025-07-15 11:13:48,346] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000016
+[2025-07-15 11:13:49,471] hb32366deMacBook-Pro/ERROR/root: ❌用户信息提交失败: 2000000014
+[2025-07-15 11:13:49,471] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000017
+[2025-07-15 11:13:49,471] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000017
+[2025-07-15 11:13:49,928] hb32366deMacBook-Pro/INFO/root: ✅登录成功!: 2000000015
+[2025-07-15 11:13:50,964] hb32366deMacBook-Pro/ERROR/root: ❌登录失败！: 2000000016
+[2025-07-15 11:13:50,964] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000018
+[2025-07-15 11:13:50,965] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000018
+[2025-07-15 11:13:51,238] hb32366deMacBook-Pro/ERROR/root: ❌用户信息提交失败: 2000000015
+[2025-07-15 11:13:51,238] hb32366deMacBook-Pro/INFO/root: 分配手机号：2000000019
+[2025-07-15 11:13:51,238] hb32366deMacBook-Pro/INFO/root: 手机号未注册: 2000000019
+KeyboardInterrupt
+```
 ## 三、hooks处理
 ### 3.1 events.init.add_listener
 - 全局初始化处理，最先执行一次，为后续步骤准备
